@@ -10,6 +10,8 @@ st.title("💉 Vaktsineerimine ja haigestumus maakonniti")
 vakts_df = pd.read_excel("andmestikud/vaktsineerimine.xlsx")
 haigused_df = pd.read_excel("andmestikud/Haigused.xlsx")
 maakond_gdf = gpd.read_file("andmestikud/maakond.json")
+asustus_gdf = gpd.read_file("andmestikud/asustusyksus.json")
+estonia_gdf = gpd.read_file("andmestikud/estonia.json")
 
 # --- PUHASTUS ---
 vakts_df.columns = vakts_df.columns.str.strip()
@@ -17,18 +19,23 @@ haigused_df.columns = haigused_df.columns.str.strip()
 vakts_df["Maakond"] = vakts_df["Maakond"].str.strip()
 haigused_df["Maakond"] = haigused_df["Maakond"].str.strip()
 maakond_gdf["NIMI"] = maakond_gdf["MNIMI"].str.strip()
+asustus_gdf["NIMI"] = asustus_gdf["ONIMI"].str.strip()
 
 vakts_df["Aasta"] = pd.to_numeric(vakts_df["Aasta"], errors="coerce")
 haigused_df["Aasta"] = pd.to_numeric(haigused_df["Aasta"], errors="coerce")
 
+# --- LISA PUNKTID TALLINN, NARVA, EESTI KOKKU ---
+extra_cities = asustus_gdf[asustus_gdf["NIMI"].isin(["Tallinn", "Narva linn"])]
+estonia_center = estonia_gdf.geometry.centroid.iloc[0]
+estonia_point = gpd.GeoDataFrame(
+    [{"NIMI": "Eesti kokku", "geometry": estonia_center}],
+    crs="EPSG:4326"
+)
+combined_gdf = pd.concat([maakond_gdf[["NIMI", "geometry"]], extra_cities[["NIMI", "geometry"]], estonia_point], ignore_index=True)
+
 # --- MÄÄRA AASTAD JA HAIUSED ---
 aastad = sorted(vakts_df["Aasta"].dropna().unique().astype(int))
-
-haigused = sorted(
-    set(vakts_df.columns) &
-    set(haigused_df.columns) -
-    {"Aasta", "Maakond"}
-)
+haigused = sorted(set(vakts_df.columns) & set(haigused_df.columns) - {"Aasta", "Maakond"})
 
 # --- KASUTAJA VALIKUD ---
 valitud_aasta = st.sidebar.selectbox("🗓 Vali aasta", aastad)
@@ -37,14 +44,14 @@ kõik_maakonnad = sorted(vakts_df["Maakond"].dropna().unique())
 valitud_maakond = st.sidebar.selectbox("📍 Vali maakond", kõik_maakonnad)
 
 # --- FILTERDA ---
-vaktsineerimine = vakts_df.query("Aasta == @valitud_aasta and Maakond != 'Eesti kokku'")[["Maakond", valitud_haigus]]
+vaktsineerimine = vakts_df.query("Aasta == @valitud_aasta")[["Maakond", valitud_haigus]]
 vaktsineerimine = vaktsineerimine.rename(columns={valitud_haigus: "Vaktsineerimine"})
 
-haigestumus = haigused_df.query("Aasta == @valitud_aasta and Maakond != 'Eesti kokku'")[["Maakond", valitud_haigus]]
+haigestumus = haigused_df.query("Aasta == @valitud_aasta")[["Maakond", valitud_haigus]]
 haigestumus = haigestumus.rename(columns={valitud_haigus: "Haigestumus"})
 
 # --- GEOANDMETEGA LIITMINE ---
-geo_df = maakond_gdf.merge(vaktsineerimine, left_on="NIMI", right_on="Maakond", how="left")
+geo_df = combined_gdf.merge(vaktsineerimine, left_on="NIMI", right_on="Maakond", how="left")
 geo_df = geo_df.merge(haigestumus, left_on="NIMI", right_on="Maakond", how="left")
 
 # --- KAARDID ---
@@ -78,15 +85,13 @@ axes[1].axis("off")
 
 st.pyplot(fig)
 
-# --- VALITUD MAAKONNA DETAILNE ÜLEVAADE ---
+# --- DETAILNE ÜLEVAADE VALITUD MAAKONNA KOHTA ---
 st.subheader(f"📍 {valitud_maakond} - detailne vaade")
 
 col1, col2 = st.columns([1, 2])
 
-# VÄIKE KAART
 with col1:
-    maakond_geom = maakond_gdf[maakond_gdf["NIMI"] == valitud_maakond]
-
+    maakond_geom = combined_gdf[combined_gdf["NIMI"] == valitud_maakond]
     if not maakond_geom.empty and maakond_geom.geometry.notnull().all():
         fig2, ax2 = plt.subplots(figsize=(5, 5))
         maakond_geom.plot(ax=ax2, color="lightblue", edgecolor="black")
@@ -96,7 +101,6 @@ with col1:
     else:
         st.warning("❗ Valitud maakonnal puudub kehtiv geomeetria.")
 
-# HAAIGESTUNUTE ARV
 with col2:
     try:
         haigus_mk = haigused_df.query("Aasta == @valitud_aasta and Maakond == @valitud_maakond")[valitud_haigus].values[0]
@@ -104,7 +108,7 @@ with col2:
     except IndexError:
         st.write("Andmed puuduvad.")
 
-# --- VAKTSINEERIMISE MÄÄR 5 AASTA LÕIKES ---
+# --- JOONDIAGRAMM EELNEVA 5 AASTA KOHTA ---
 st.subheader("📈 Vaktsineerimise määr (eelnevad 5 aastat)")
 
 eelnevad_aastad = [a for a in aastad if a < valitud_aasta][-5:]
