@@ -6,7 +6,7 @@ import plotly.express as px
 from shapely.ops import unary_union
 
 # --- PEALKIRI ---
-st.title("💉 Vaktsineerimine ja haigestumus maakonniti")
+st.title("💉 Vaktsineerimine ja haigestumus maakonniti versioon 3")
 
 # --- LAE ANDMED ---
 vakts_df = pd.read_excel("andmestikud/vaktsineerimine.xlsx")
