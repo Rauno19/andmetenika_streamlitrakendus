@@ -96,7 +96,10 @@ col1, col2 = st.columns([1, 2])
 
 with col1:
     if valitud_maakond == "Eesti kokku":
-        eesti_geom = gpd.GeoDataFrame(geometry=[maakond_gdf.unary_union], crs=maakond_gdf.crs)
+        eesti_geom = gpd.GeoDataFrame(
+    geometry=[maakond_gdf[maakond_gdf.geometry.notnull()].unary_union],
+    crs=maakond_gdf.crs
+)
         fig2, ax2 = plt.subplots(figsize=(5, 5))
         eesti_geom.plot(ax=ax2, color="lightblue", edgecolor="black")
         ax2.set_title("Eesti kokku")
