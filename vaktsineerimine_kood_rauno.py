@@ -33,8 +33,6 @@ haigused = sorted(
 # --- KASUTAJA VALIKUD ---
 valitud_aasta = st.sidebar.selectbox("🗓 Vali aasta", aastad)
 valitud_haigus = st.sidebar.selectbox("🦠 Vali haigus", haigused)
-
-# --- MAAKONNA VALIK ---
 kõik_maakonnad = sorted(vakts_df["Maakond"].dropna().unique())
 valitud_maakond = st.sidebar.selectbox("📍 Vali maakond", kõik_maakonnad)
 
@@ -80,15 +78,38 @@ axes[1].axis("off")
 
 st.pyplot(fig)
 
-# --- KOKKUVÕTE VALITUD MAAKONNA KOHTA ---
-st.subheader(f"📌 {valitud_maakond} ({valitud_aasta}) kokkuvõte")
+# --- VALITUD MAAKONNA DETAILNE ÜLEVAADE ---
+st.subheader(f"📍 {valitud_maakond} - detailne vaade")
 
-try:
-    vakts_mk = vakts_df.query("Aasta == @valitud_aasta and Maakond == @valitud_maakond")[valitud_haigus].values[0]
-    haigus_mk = haigused_df.query("Aasta == @valitud_aasta and Maakond == @valitud_maakond")[valitud_haigus].values[0]
-except IndexError:
-    vakts_mk = haigus_mk = None
+col1, col2 = st.columns([1, 2])
 
-col1, col2 = st.columns(2)
-col1.metric("Vaktsineerimise määr (%)", f"{vakts_mk}" if vakts_mk else "–")
-col2.metric("Haigestunute arv", f"{int(haigus_mk)}" if haigus_mk else "–")
+# VÄIKE KAART
+with col1:
+    fig2, ax2 = plt.subplots(figsize=(5, 5))
+    maakond_geom = maakond_gdf[maakond_gdf["NIMI"] == valitud_maakond]
+    maakond_geom.plot(ax=ax2, color="lightblue", edgecolor="black")
+    ax2.set_title(f"{valitud_maakond}")
+    ax2.axis("off")
+    st.pyplot(fig2)
+
+# HAAIGESTUNUTE ARV
+with col2:
+    try:
+        haigus_mk = haigused_df.query("Aasta == @valitud_aasta and Maakond == @valitud_maakond")[valitud_haigus].values[0]
+        st.metric("Haigestunute arv", f"{int(haigus_mk)}")
+    except IndexError:
+        st.write("Andmed puuduvad.")
+
+# --- VAKTSINEERIMISE MÄÄR 5 AASTA LÕIKES ---
+st.subheader("📈 Vaktsineerimise määr (eelnevad 5 aastat)")
+
+eelnevad_aastad = [a for a in aastad if a < valitud_aasta][-5:]
+vakts_ajalugu = vakts_df[
+    (vakts_df["Aasta"].isin(eelnevad_aastad)) &
+    (vakts_df["Maakond"] == valitud_maakond)
+][["Aasta", valitud_haigus]].rename(columns={valitud_haigus: "Vaktsineerimine"}).sort_values("Aasta")
+
+if not vakts_ajalugu.empty:
+    st.line_chart(vakts_ajalugu.set_index("Aasta"))
+else:
+    st.info("Puuduvad andmed vaktsineerimise kohta viimase 5 aasta jooksul.")
