@@ -24,7 +24,6 @@ haigused_df["Aasta"] = pd.to_numeric(haigused_df["Aasta"], errors="coerce")
 # --- MÄÄRA AASTAD JA HAIUSED ---
 aastad = sorted(vakts_df["Aasta"].dropna().unique().astype(int))
 
-# Ainult need haigused, mis on mõlemas failis olemas
 haigused = sorted(
     set(vakts_df.columns) &
     set(haigused_df.columns) -
@@ -89,6 +88,3 @@ except IndexError:
 col1, col2 = st.columns(2)
 col1.metric("Vaktsineerimise määr (%)", f"{vakts_eesti}" if vakts_eesti else "–")
 col2.metric("Haigestunute arv", f"{int(haigus_eesti)}" if haigus_eesti else "–")
-
-# --- DEBUG: KUVA HAIUSTE NIMEKIRI ---
-st.write("👉 Valikus olevad haigused:", haigused)
