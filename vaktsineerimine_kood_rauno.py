@@ -148,4 +148,4 @@ if not vakts_ajalugu.empty:
     fig.update_layout(xaxis=dict(dtick=1))
     st.plotly_chart(fig, use_container_width=True)
 else:
-    st.info("Puuduvad andmed vaktsineerimise kohta viimase 5 aasta jooksul.")
+    st.info("Puuduvad andmed vaktsineerimise kohta viimase 5 aasta jooksul!")
