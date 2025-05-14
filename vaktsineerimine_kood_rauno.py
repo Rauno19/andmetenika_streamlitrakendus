@@ -34,6 +34,10 @@ haigused = sorted(
 valitud_aasta = st.sidebar.selectbox("🗓 Vali aasta", aastad)
 valitud_haigus = st.sidebar.selectbox("🦠 Vali haigus", haigused)
 
+# --- MAAKONNA VALIK ---
+kõik_maakonnad = sorted(vakts_df["Maakond"].dropna().unique())
+valitud_maakond = st.sidebar.selectbox("📍 Vali maakond", kõik_maakonnad)
+
 # --- FILTERDA ---
 vaktsineerimine = vakts_df.query("Aasta == @valitud_aasta and Maakond != 'Eesti kokku'")[["Maakond", valitud_haigus]]
 vaktsineerimine = vaktsineerimine.rename(columns={valitud_haigus: "Vaktsineerimine"})
@@ -76,15 +80,15 @@ axes[1].axis("off")
 
 st.pyplot(fig)
 
-# --- KOKKUVÕTE EESTI KOHTA ---
-st.subheader("🌍 Kogu Eesti kohta")
+# --- KOKKUVÕTE VALITUD MAAKONNA KOHTA ---
+st.subheader(f"📌 {valitud_maakond} ({valitud_aasta}) kokkuvõte")
 
 try:
-    vakts_eesti = vakts_df.query("Aasta == @valitud_aasta and Maakond == 'Eesti kokku'")[valitud_haigus].values[0]
-    haigus_eesti = haigused_df.query("Aasta == @valitud_aasta and Maakond == 'Eesti kokku'")[valitud_haigus].values[0]
+    vakts_mk = vakts_df.query("Aasta == @valitud_aasta and Maakond == @valitud_maakond")[valitud_haigus].values[0]
+    haigus_mk = haigused_df.query("Aasta == @valitud_aasta and Maakond == @valitud_maakond")[valitud_haigus].values[0]
 except IndexError:
-    vakts_eesti = haigus_eesti = None
+    vakts_mk = haigus_mk = None
 
 col1, col2 = st.columns(2)
-col1.metric("Vaktsineerimise määr (%)", f"{vakts_eesti}" if vakts_eesti else "–")
-col2.metric("Haigestunute arv", f"{int(haigus_eesti)}" if haigus_eesti else "–")
+col1.metric("Vaktsineerimise määr (%)", f"{vakts_mk}" if vakts_mk else "–")
+col2.metric("Haigestunute arv", f"{int(haigus_mk)}" if haigus_mk else "–")
