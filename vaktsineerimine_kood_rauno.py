@@ -56,7 +56,8 @@ haigestumus = haigused_df.query("Aasta == @valitud_aasta")[["Maakond", valitud_h
 haigestumus = haigestumus.rename(columns={valitud_haigus: "Haigestumus"})
 
 # --- GEOANDMETEGA LIITMINE ---
-geo_df = combined_gdf.merge(vaktsineerimine, left_on="NIMI", right_on="Maakond", how="left")
+geo_df = combined_gdf[combined_gdf["NIMI"] != "Eesti kokku"].copy()
+geo_df = geo_df.merge(vaktsineerimine, left_on="NIMI", right_on="Maakond", how="left")
 geo_df = geo_df.merge(haigestumus, left_on="NIMI", right_on="Maakond", how="left")
 
 # --- KAARDID ---
@@ -122,7 +123,7 @@ with col2:
     except IndexError:
         st.write("Andmed puuduvad.")
 
-# --- JOONDIAGRAMM: VAKTS. MÄÄR EELNEVA 5 AASTA JOOKSUL ---
+# --- JOONDIAGRAMM: VAKTS. MÄÄR EELNEVAL 5 AASTAL ---
 st.subheader("📈 Vaktsineerimise määr (eelnevad 5 aastat)")
 
 eelnevad_aastad = [a for a in aastad if a < valitud_aasta][-5:]
@@ -132,6 +133,13 @@ vakts_ajalugu = vakts_df[
 ][["Aasta", valitud_haigus]].rename(columns={valitud_haigus: "Vaktsineerimine"}).sort_values("Aasta")
 
 if not vakts_ajalugu.empty:
-    st.line_chart(vakts_ajalugu.set_index("Aasta"))
+    fig3, ax3 = plt.subplots()
+    ax3.plot(vakts_ajalugu["Aasta"], vakts_ajalugu["Vaktsineerimine"], marker="o")
+    ax3.set_title("Vaktsineerimise määr (eelnevad 5 aastat)")
+    ax3.set_xlabel("Aasta")
+    ax3.set_ylabel("Vaktsineerimise %")
+    ax3.set_ylim(0, 100)
+    ax3.set_xticks(vakts_ajalugu["Aasta"])
+    st.pyplot(fig3)
 else:
     st.info("Puuduvad andmed vaktsineerimise kohta viimase 5 aasta jooksul.")
