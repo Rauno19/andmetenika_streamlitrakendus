@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import geopandas as gpd
 import matplotlib.pyplot as plt
+from shapely.ops import unary_union
 
 # --- PEALKIRI ---
 st.title("💉 Vaktsineerimine ja haigestumus maakonniti")
@@ -24,7 +25,7 @@ asustus_gdf["NIMI"] = asustus_gdf["ONIMI"].str.strip()
 vakts_df["Aasta"] = pd.to_numeric(vakts_df["Aasta"], errors="coerce")
 haigused_df["Aasta"] = pd.to_numeric(haigused_df["Aasta"], errors="coerce")
 
-# --- LISA PUNKTID TALLINN, NARVA, JA "EESTI KOKKU" ---
+# --- LISA TALLINN, NARVA ja EESTI KOKKU ---
 extra_cities = asustus_gdf[asustus_gdf["NIMI"].isin(["Tallinn", "Narva linn"])]
 estonia_center = estonia_gdf.geometry.centroid.iloc[0]
 estonia_point = gpd.GeoDataFrame(
@@ -37,7 +38,7 @@ combined_gdf = pd.concat(
     ignore_index=True
 )
 
-# --- MÄÄRA AASTAD JA HAIUSED ---
+# --- AASTAD JA HAIUSED ---
 aastad = sorted(vakts_df["Aasta"].dropna().unique().astype(int))
 haigused = sorted(set(vakts_df.columns) & set(haigused_df.columns) - {"Aasta", "Maakond"})
 
@@ -89,17 +90,15 @@ axes[1].axis("off")
 
 st.pyplot(fig)
 
-# --- DETAILNE ÜLEVAADE VALITUD MAAKONNA KOHTA ---
+# --- DETAILNE ÜLEVAADE MAAKONNA KOHTA ---
 st.subheader(f"📍 {valitud_maakond} - detailne vaade")
 
 col1, col2 = st.columns([1, 2])
 
 with col1:
     if valitud_maakond == "Eesti kokku":
-        eesti_geom = gpd.GeoDataFrame(
-    geometry=[maakond_gdf[maakond_gdf.geometry.notnull()].unary_union],
-    crs=maakond_gdf.crs
-)
+        valid_geoms = [geom for geom in maakond_gdf.geometry if geom is not None and geom.is_valid]
+        eesti_geom = gpd.GeoDataFrame(geometry=[unary_union(valid_geoms)], crs=maakond_gdf.crs)
         fig2, ax2 = plt.subplots(figsize=(5, 5))
         eesti_geom.plot(ax=ax2, color="lightblue", edgecolor="black")
         ax2.set_title("Eesti kokku")
@@ -123,7 +122,7 @@ with col2:
     except IndexError:
         st.write("Andmed puuduvad.")
 
-# --- JOONDIAGRAMM EELNEVA 5 AASTA KOHTA ---
+# --- JOONDIAGRAMM: VAKTS. MÄÄR EELNEVA 5 AASTA JOOKSUL ---
 st.subheader("📈 Vaktsineerimise määr (eelnevad 5 aastat)")
 
 eelnevad_aastad = [a for a in aastad if a < valitud_aasta][-5:]
