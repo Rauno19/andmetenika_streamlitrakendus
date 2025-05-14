@@ -6,9 +6,14 @@ import plotly.express as px
 from shapely.ops import unary_union
 
 # --- PEALKIRI ---
-st.title("💉 Vaktsineerimine ja haigestumus maakonniti versioon 3")
+st.title("💉 Vaktsineerimine ja haigestumus maakonniti")
 
-#
+# --- LAE ANDMED ---
+vakts_df = pd.read_excel("andmestikud/vaktsineerimine.xlsx")
+haigused_df = pd.read_excel("andmestikud/Haigused.xlsx")
+maakond_gdf = gpd.read_file("andmestikud/maakond.json")
+asustus_gdf = gpd.read_file("andmestikud/asustusyksus.json")
+estonia_gdf = gpd.read_file("andmestikud/estonia.json")
 
 # --- PUHASTUS ---
 vakts_df.columns = vakts_df.columns.str.strip()
@@ -145,4 +150,3 @@ if not vakts_ajalugu.empty:
     st.plotly_chart(fig, use_container_width=True)
 else:
     st.info("Puuduvad andmed vaktsineerimise kohta viimase 5 aasta jooksul.")
-
