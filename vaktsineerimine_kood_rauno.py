@@ -92,7 +92,7 @@ axes[1].axis("off")
 
 st.pyplot(fig)
 
-# --- DETAILNE ÜLEVAADE MAAKONNA KOHTA ---
+# --- DETAILNE ÜLEVAADE ---
 st.subheader(f"📍 {valitud_maakond} - detailne vaade")
 
 if valitud_maakond != "Eesti kokku":
@@ -127,7 +127,7 @@ else:
     except IndexError:
         st.write("Andmed puuduvad.")
 
-# --- JOONDIAGRAMM: VAKTS. MÄÄR EELNEVAL 5 AASTAL ---
+# --- INTERAKTIIVNE GRAAFIK: VAKTS. MÄÄR VIIMASE 5 AASTA JOOKSUL ---
 st.subheader("📈 Vaktsineerimise määr (eelnevad 5 aastat)")
 
 eelnevad_aastad = [a for a in aastad if a < valitud_aasta][-5:]
