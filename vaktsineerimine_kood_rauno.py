@@ -93,9 +93,9 @@ axes[1].axis("off")
 st.pyplot(fig)
 
 # --- DETAILNE ÜLEVAADE ---
-st.subheader(f"📍 {valitud_maakond} - detailne vaade")
-
 if valitud_maakond != "Eesti kokku":
+    st.subheader(f"📍 {valitud_maakond} - detailne vaade")
+
     col1, col2 = st.columns([1, 2])
 
     with col1:
@@ -118,6 +118,7 @@ if valitud_maakond != "Eesti kokku":
         except IndexError:
             st.write("Andmed puuduvad.")
 else:
+    st.subheader("🌍 Eesti kokku – ülevaade")
     try:
         haigus_eesti = haigused_df.query("Aasta == @valitud_aasta and Maakond == 'Eesti kokku'")[valitud_haigus].values[0]
         vakts_eesti = vakts_df.query("Aasta == @valitud_aasta and Maakond == 'Eesti kokku'")[valitud_haigus].values[0]
@@ -149,3 +150,4 @@ if not vakts_ajalugu.empty:
     st.plotly_chart(fig, use_container_width=True)
 else:
     st.info("Puuduvad andmed vaktsineerimise kohta viimase 5 aasta jooksul.")
+
