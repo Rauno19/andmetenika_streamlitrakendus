@@ -1,11 +1,7 @@
 streamlit
 pandas
-requests
 geopandas
-matplotlib
-pyproj
 shapely
-fiona
-rtree
-openpyxl
+matplotlib
 plotly
+openpyxl
