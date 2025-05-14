@@ -85,12 +85,16 @@ col1, col2 = st.columns([1, 2])
 
 # VÄIKE KAART
 with col1:
-    fig2, ax2 = plt.subplots(figsize=(5, 5))
     maakond_geom = maakond_gdf[maakond_gdf["NIMI"] == valitud_maakond]
-    maakond_geom.plot(ax=ax2, color="lightblue", edgecolor="black")
-    ax2.set_title(f"{valitud_maakond}")
-    ax2.axis("off")
-    st.pyplot(fig2)
+
+    if not maakond_geom.empty and maakond_geom.geometry.notnull().all():
+        fig2, ax2 = plt.subplots(figsize=(5, 5))
+        maakond_geom.plot(ax=ax2, color="lightblue", edgecolor="black")
+        ax2.set_title(f"{valitud_maakond}")
+        ax2.axis("off")
+        st.pyplot(fig2)
+    else:
+        st.warning("❗ Valitud maakonnal puudub kehtiv geomeetria.")
 
 # HAAIGESTUNUTE ARV
 with col2:
