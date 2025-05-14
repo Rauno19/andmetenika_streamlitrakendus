@@ -8,3 +8,4 @@ shapely
 fiona
 rtree
 openpyxl
+plotly

@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import geopandas as gpd
 import matplotlib.pyplot as plt
+import plotly.express as px
 from shapely.ops import unary_union
 
 # --- PEALKIRI ---
@@ -94,18 +95,10 @@ st.pyplot(fig)
 # --- DETAILNE ÜLEVAADE MAAKONNA KOHTA ---
 st.subheader(f"📍 {valitud_maakond} - detailne vaade")
 
-col1, col2 = st.columns([1, 2])
+if valitud_maakond != "Eesti kokku":
+    col1, col2 = st.columns([1, 2])
 
-with col1:
-    if valitud_maakond == "Eesti kokku":
-        valid_geoms = [geom for geom in maakond_gdf.geometry if geom is not None and geom.is_valid]
-        eesti_geom = gpd.GeoDataFrame(geometry=[unary_union(valid_geoms)], crs=maakond_gdf.crs)
-        fig2, ax2 = plt.subplots(figsize=(5, 5))
-        eesti_geom.plot(ax=ax2, color="lightblue", edgecolor="black")
-        ax2.set_title("Eesti kokku")
-        ax2.axis("off")
-        st.pyplot(fig2)
-    else:
+    with col1:
         maakond_geom = combined_gdf[combined_gdf["NIMI"] == valitud_maakond]
         if not maakond_geom.empty and maakond_geom.geometry.notnull().all():
             fig2, ax2 = plt.subplots(figsize=(5, 5))
@@ -116,10 +109,21 @@ with col1:
         else:
             st.warning("❗ Valitud maakonnal puudub kehtiv geomeetria.")
 
-with col2:
+    with col2:
+        try:
+            haigus_mk = haigused_df.query("Aasta == @valitud_aasta and Maakond == @valitud_maakond")[valitud_haigus].values[0]
+            vakts_mk = vakts_df.query("Aasta == @valitud_aasta and Maakond == @valitud_maakond")[valitud_haigus].values[0]
+            st.metric("Haigestunute arv", f"{int(haigus_mk)}")
+            st.metric("Vaktsineerimise määr (%)", f"{vakts_mk}")
+        except IndexError:
+            st.write("Andmed puuduvad.")
+else:
     try:
-        haigus_mk = haigused_df.query("Aasta == @valitud_aasta and Maakond == @valitud_maakond")[valitud_haigus].values[0]
-        st.metric("Haigestunute arv", f"{int(haigus_mk)}")
+        haigus_eesti = haigused_df.query("Aasta == @valitud_aasta and Maakond == 'Eesti kokku'")[valitud_haigus].values[0]
+        vakts_eesti = vakts_df.query("Aasta == @valitud_aasta and Maakond == 'Eesti kokku'")[valitud_haigus].values[0]
+        col1, col2 = st.columns(2)
+        col1.metric("Haigestunute arv", f"{int(haigus_eesti)}")
+        col2.metric("Vaktsineerimise määr (%)", f"{vakts_eesti}")
     except IndexError:
         st.write("Andmed puuduvad.")
 
@@ -133,13 +137,15 @@ vakts_ajalugu = vakts_df[
 ][["Aasta", valitud_haigus]].rename(columns={valitud_haigus: "Vaktsineerimine"}).sort_values("Aasta")
 
 if not vakts_ajalugu.empty:
-    fig3, ax3 = plt.subplots()
-    ax3.plot(vakts_ajalugu["Aasta"], vakts_ajalugu["Vaktsineerimine"], marker="o")
-    ax3.set_title("Vaktsineerimise määr (eelnevad 5 aastat)")
-    ax3.set_xlabel("Aasta")
-    ax3.set_ylabel("Vaktsineerimise %")
-    ax3.set_ylim(0, 100)
-    ax3.set_xticks(vakts_ajalugu["Aasta"])
-    st.pyplot(fig3)
+    fig = px.line(
+        vakts_ajalugu,
+        x="Aasta",
+        y="Vaktsineerimine",
+        markers=True,
+        title="Vaktsineerimise määr (eelnevad 5 aastat)",
+        range_y=[0, 100]
+    )
+    fig.update_layout(xaxis=dict(dtick=1))
+    st.plotly_chart(fig, use_container_width=True)
 else:
     st.info("Puuduvad andmed vaktsineerimise kohta viimase 5 aasta jooksul.")
