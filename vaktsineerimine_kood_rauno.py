@@ -3,160 +3,164 @@ import pandas as pd
 import geopandas as gpd
 import matplotlib.pyplot as plt
 import plotly.express as px
-
 from shapely.ops import unary_union
 
+plt.style.use("seaborn-v0_8-muted")
+
+# --- SEADISTUS ---
 st.set_page_config(layout="wide")
 st.title("💉 Vaktsineerimine ja haigestumus maakonniti")
 
 # --- LAE ANDMED ---
-vakts_df = pd.read_excel("andmestikud/vaktsineerimine.xlsx")
-haigused_df = pd.read_excel("andmestikud/Haigused.xlsx")
-maakond_gdf = gpd.read_file("andmestikud/maakond.json")
-asustus_gdf = gpd.read_file("andmestikud/asustusyksus.json")
-estonia_gdf = gpd.read_file("andmestikud/estonia.json")
+vakts_df = pd.read_excel("vaktsineerimine.xlsx")
+haigused_df = pd.read_excel("Haigused.xlsx")
+maakond_gdf = gpd.read_file("maakond.json")
+asustus_gdf = gpd.read_file("asustusyksus.json")
+estonia_gdf = gpd.read_file("estonia.json")
 
 # --- PUHASTUS ---
-vakts_df.columns = vakts_df.columns.str.strip()
-haigused_df.columns = haigused_df.columns.str.strip()
-vakts_df["Maakond"] = vakts_df["Maakond"].str.strip()
-haigused_df["Maakond"] = haigused_df["Maakond"].str.strip()
+for df in [vakts_df, haigused_df]:
+    df.columns = df.columns.str.strip()
+    df["Maakond"] = df["Maakond"].str.strip()
+    df["Aasta"] = pd.to_numeric(df["Aasta"], errors="coerce")
+
 maakond_gdf["NIMI"] = maakond_gdf["MNIMI"].str.strip()
 asustus_gdf["NIMI"] = asustus_gdf["ONIMI"].str.strip()
-vakts_df["Aasta"] = pd.to_numeric(vakts_df["Aasta"], errors="coerce")
-haigused_df["Aasta"] = pd.to_numeric(haigused_df["Aasta"], errors="coerce")
 
-# --- LISA TALLINN, NARVA, EESTI KOKKU ---
+# --- LISA TALLINN ja NARVA ---
 extra_cities = asustus_gdf[asustus_gdf["NIMI"].isin(["Tallinn", "Narva linn"])]
-estonia_center = estonia_gdf.geometry.centroid.iloc[0]
-estonia_point = gpd.GeoDataFrame(
-    [{"NIMI": "Eesti kokku", "geometry": estonia_center}],
-    crs="EPSG:4326"
-)
-
 combined_gdf = pd.concat(
-    [maakond_gdf[["NIMI", "geometry"]], extra_cities[["NIMI", "geometry"]], estonia_point],
+    [maakond_gdf[["NIMI", "geometry"]], extra_cities[["NIMI", "geometry"]]],
     ignore_index=True
-)
+).drop_duplicates(subset="NIMI")
 
 # --- KASUTAJA VALIKUD ---
 aastad = sorted(vakts_df["Aasta"].dropna().unique().astype(int))
-haigused = sorted(set(vakts_df.columns) & set(haigused_df.columns) - {"Aasta", "Maakond"})
-kõik_maakonnad = sorted(vakts_df["Maakond"].dropna().unique())
+haigused_kandidaadid = set(vakts_df.columns) & set(haigused_df.columns) - {"Aasta", "Maakond"}
+haigused = sorted(haigused_kandidaadid)
 
-st.sidebar.header("🎛️ Valikud")
 valitud_aasta = st.sidebar.selectbox("🗓 Vali aasta", aastad)
-valitud_haigus = st.sidebar.selectbox("🦠 Vali haigus", haigused)
-valitud_maakond = st.sidebar.selectbox("📍 Vali maakond", ["Eesti kokku"] + kõik_maakonnad)
+haiguste_arv = st.sidebar.slider("🦠 Mitu haigust soovid võrrelda?", 1, min(5, len(haigused)), 1)
+valitud_haigused = st.sidebar.multiselect("🦠 Vali haigused", options=haigused, default=haigused[:haiguste_arv], max_selections=haiguste_arv)
+maakonnad = sorted(set(vakts_df["Maakond"]) | set(haigused_df["Maakond"]))
+valitud_maakond = st.sidebar.selectbox("📍 Vali maakond", maakonnad)
 
-# --- FILTERDA ANDMED ---
-vaktsineerimine = vakts_df.query("Aasta == @valitud_aasta")[["Maakond", valitud_haigus]]
-vaktsineerimine = vaktsineerimine.rename(columns={valitud_haigus: "Vaktsineerimine"})
-haigestumus = haigused_df.query("Aasta == @valitud_aasta")[["Maakond", valitud_haigus]]
-haigestumus = haigestumus.rename(columns={valitud_haigus: "Haigestumus"})
+if not valitud_haigused:
+    st.warning("Palun vali vähemalt üks haigus.")
+    st.stop()
 
-geo_df = combined_gdf[combined_gdf["NIMI"] != "Eesti kokku"].copy()
-geo_df = geo_df.merge(vaktsineerimine, left_on="NIMI", right_on="Maakond", how="left")
-geo_df = geo_df.merge(haigestumus, left_on="NIMI", right_on="Maakond", how="left")
+tabs = st.tabs(valitud_haigused)
+for i, valitud_haigus in enumerate(valitud_haigused):
+    with tabs[i]:
+        vakts = vakts_df.query("Aasta == @valitud_aasta")[["Maakond", valitud_haigus]].rename(columns={valitud_haigus: "Vaktsineerimine"})
+        haigus = haigused_df.query("Aasta == @valitud_aasta")[["Maakond", valitud_haigus]].rename(columns={valitud_haigus: "Haigestumus"})
 
-# --- KAARDID ---
-st.subheader(f"{valitud_haigus} ({valitud_aasta}) maakonniti")
+        geo_df = combined_gdf.merge(vakts, left_on="NIMI", right_on="Maakond", how="left")
+        geo_df = geo_df.merge(haigus, on="Maakond", how="left")
 
-fig, axes = plt.subplots(1, 2, figsize=(20, 10))
+        fig, axes = plt.subplots(1, 2, figsize=(20, 10))
+        geo_df.plot(column="Vaktsineerimine", cmap="viridis", linewidth=0.3, edgecolor="#f8f8f8", legend=True,
+                    ax=axes[0], legend_kwds={"label": "Vaktsineerimise %", "orientation": "horizontal"})
+        axes[0].set_title("💉 Vaktsineerimine", fontsize=14)
+        axes[0].axis("off")
 
-geo_df.plot(column="Vaktsineerimine", cmap="YlGnBu", linewidth=0.5,
-            edgecolor="white", legend=True, ax=axes[0],
-            legend_kwds={"label": "Vaktsineerimise %", "orientation": "horizontal"})
-axes[0].set_title("Vaktsineerimise määr")
-axes[0].axis("off")
+        geo_df.plot(column="Haigestumus", cmap="OrRd", linewidth=0.3, edgecolor="#f8f8f8", legend=True,
+                    ax=axes[1], legend_kwds={"label": "Haigestunute arv", "orientation": "horizontal"})
+        axes[1].set_title("🦠 Haigestumus", fontsize=14)
+        axes[1].axis("off")
+        st.pyplot(fig)
 
-geo_df.plot(column="Haigestumus", cmap="Reds", linewidth=0.5,
-            edgecolor="white", legend=True, ax=axes[1],
-            legend_kwds={"label": "Haigestunute arv", "orientation": "horizontal"})
-axes[1].set_title("Haigestumus")
-axes[1].axis("off")
+        st.markdown(f"#### 📍 {valitud_maakond} – detailne vaade")
+        col1, col2 = st.columns([1, 2])
 
-st.pyplot(fig)
+        with col1:
+            if valitud_maakond == "Eesti kokku":
+                eesti_geom = unary_union(estonia_gdf.geometry.buffer(0))
+                fig2, ax2 = plt.subplots(figsize=(5, 5))
+                gpd.GeoSeries([eesti_geom]).plot(ax=ax2, color="lightgray", edgecolor="black")
+                ax2.set_title("Eesti kokku")
+                ax2.axis("off")
+                st.pyplot(fig2)
+            else:
+                maakond_geom = combined_gdf[combined_gdf["NIMI"] == valitud_maakond]
+                if not maakond_geom.empty:
+                    fig2, ax2 = plt.subplots(figsize=(5, 5))
+                    maakond_geom.plot(ax=ax2, color="#aad3df", edgecolor="#2c3e50")
+                    ax2.set_title(valitud_maakond)
+                    ax2.axis("off")
+                    st.pyplot(fig2)
+                else:
+                    st.warning("❗ Kehtiv geomeetria puudub.")
 
-# --- DETAILNE TABEL ---
-if valitud_maakond != "Eesti kokku":
-    st.subheader(f"📍 {valitud_maakond} - detailne vaade")
-    col1, col2 = st.columns([1, 2])
-    with col1:
-        maakond_geom = combined_gdf[combined_gdf["NIMI"] == valitud_maakond]
-        if not maakond_geom.empty and maakond_geom.geometry.notnull().all():
-            fig2, ax2 = plt.subplots(figsize=(5, 5))
-            maakond_geom.plot(ax=ax2, color="lightblue", edgecolor="black")
-            ax2.set_title(valitud_maakond)
-            ax2.axis("off")
-            st.pyplot(fig2)
-        else:
-            st.warning("❗ Valitud maakonnal puudub kehtiv geomeetria.")
-    with col2:
-        try:
-            haigus_mk = haigused_df.query("Aasta == @valitud_aasta and Maakond == @valitud_maakond")[valitud_haigus].values[0]
-            vakts_mk = vakts_df.query("Aasta == @valitud_aasta and Maakond == @valitud_maakond")[valitud_haigus].values[0]
-            st.metric("Haigestunute arv", f"{int(haigus_mk)}")
-            st.metric("Vaktsineerimise määr (%)", f"{vakts_mk}")
-        except IndexError:
-            st.warning("Andmed puuduvad.")
-else:
-    st.subheader("🌍 Eesti kokku – ülevaade")
+        with col2:
+            try:
+                ha = haigused_df.query("Aasta == @valitud_aasta and Maakond == @valitud_maakond")[valitud_haigus].values[0]
+                va = vakts_df.query("Aasta == @valitud_aasta and Maakond == @valitud_maakond")[valitud_haigus].values[0]
+                st.metric("Haigestunute arv", f"{int(ha)}")
+                st.metric("Vaktsineerimise määr (%)", f"{va}")
+            except IndexError:
+                st.info("Andmed puuduvad.")
+
+        st.markdown("#### 📉 Vaktsineerimata vs haigestumus")
+        scatter_df = vakts_df[vakts_df["Aasta"] == valitud_aasta][["Maakond", valitud_haigus]].rename(columns={valitud_haigus: "Vaktsineerimine"})
+        scatter_df = scatter_df.merge(
+            haigused_df[haigused_df["Aasta"] == valitud_aasta][["Maakond", valitud_haigus]].rename(columns={valitud_haigus: "Haigestumus"}),
+            on="Maakond")
+        scatter_df["Vaktsineerimata"] = 100 - scatter_df["Vaktsineerimine"]
+
+        if not scatter_df.empty:
+            fig3 = px.scatter(
+                scatter_df, x="Vaktsineerimata", y="Haigestumus", text="Maakond",
+                color="Haigestumus", color_continuous_scale="Reds",
+                title="Seos: vaktsineerimata vs haigestunud"
+            )
+            fig3.update_traces(textposition="top center")
+            st.plotly_chart(fig3, use_container_width=True, key=f"scatter_{valitud_haigus}")
+
+        st.markdown("#### 📈 Trend viimase 5 aasta jooksul")
+        eelnevad = [a for a in aastad if a < valitud_aasta][-5:]
+        vakts_trend = vakts_df.query("Maakond == @valitud_maakond and Aasta in @eelnevad")[["Aasta", valitud_haigus]].rename(columns={valitud_haigus: "Vaktsineerimine"})
+        haigus_trend = haigused_df.query("Maakond == @valitud_maakond and Aasta in @eelnevad")[["Aasta", valitud_haigus]].rename(columns={valitud_haigus: "Haigestumus"})
+
+        if not vakts_trend.empty and not haigus_trend.empty:
+            trend_df = vakts_trend.merge(haigus_trend, on="Aasta")
+            fig4 = px.line(trend_df, x="Aasta", y=["Vaktsineerimine", "Haigestumus"], markers=True, color_discrete_map={
+                "Vaktsineerimine": "#2980b9", "Haigestumus": "#e74c3c"
+            })
+            st.plotly_chart(fig4, use_container_width=True, key=f"trend_{valitud_haigus}")
+
+# --- AJAJADA ---
+st.subheader(f"📊 {valitud_maakond} – Ajaloolised andmed")
+v_ajalugu = vakts_df.query("Maakond == @valitud_maakond")[["Aasta", valitud_haigused[0]]].dropna()
+h_ajalugu = haigused_df.query("Maakond == @valitud_maakond")[["Aasta", valitud_haigused[0]]].dropna()
+
+col1, col2 = st.columns(2)
+with col1:
+    st.write("**Vaktsineerimise määr (%)**")
+    fig5, ax5 = plt.subplots()
+    ax5.plot(v_ajalugu["Aasta"], v_ajalugu[valitud_haigused[0]], marker="o", color="#3498db")
+    ax5.grid(True, linestyle="--", alpha=0.6)
+    st.pyplot(fig5)
+
+with col2:
+    st.write("**Haigestumus (juhtumid)**")
+    fig6, ax6 = plt.subplots()
+    ax6.plot(h_ajalugu["Aasta"], h_ajalugu[valitud_haigused[0]], marker="o", color="#e74c3c")
+    ax6.grid(True, linestyle="--", alpha=0.6)
+    st.pyplot(fig6)
+
+# --- KOKKUVÕTE TÜLPGRAAFIKUS ---
+andmed = []
+for haigus in valitud_haigused:
     try:
-        haigus_eesti = haigused_df.query("Aasta == @valitud_aasta and Maakond == 'Eesti kokku'")[valitud_haigus].values[0]
-        vakts_eesti = vakts_df.query("Aasta == @valitud_aasta and Maakond == 'Eesti kokku'")[valitud_haigus].values[0]
-        col1, col2 = st.columns(2)
-        col1.metric("Haigestunute arv", f"{int(haigus_eesti)}")
-        col2.metric("Vaktsineerimise määr (%)", f"{vakts_eesti}")
-    except IndexError:
-        st.warning("Andmed puuduvad.")
+        vakts = vakts_df.query("Aasta == @valitud_aasta & Maakond == @valitud_maakond")[haigus].values[0]
+        haig = haigused_df.query("Aasta == @valitud_aasta & Maakond == @valitud_maakond")[haigus].values[0]
+        andmed.append({"Haigus": haigus, "Tüüp": "Vaktsineerimine", "Väärtus": vakts})
+        andmed.append({"Haigus": haigus, "Tüüp": "Haigestumus", "Väärtus": haig})
+    except:
+        continue
 
-# --- TRENDID: VAKTSINEERIMINE JA HAIGUSTE ARV ---
-st.subheader("📈 Vaktsineerimise ja haigestumise trend (eelnevad 5 aastat)")
-
-eelnevad_aastad = [a for a in aastad if a < valitud_aasta][-5:]
-
-vakts_ajalugu = vakts_df[
-    (vakts_df["Aasta"].isin(eelnevad_aastad)) &
-    (vakts_df["Maakond"] == valitud_maakond)
-][["Aasta", valitud_haigus]].rename(columns={valitud_haigus: "Vaktsineerimine"}).sort_values("Aasta")
-
-haigus_ajalugu = haigused_df[
-    (haigused_df["Aasta"].isin(eelnevad_aastad)) &
-    (haigused_df["Maakond"] == valitud_maakond)
-][["Aasta", valitud_haigus]].rename(columns={valitud_haigus: "Haigestumus"}).sort_values("Aasta")
-
-if not vakts_ajalugu.empty and not haigus_ajalugu.empty:
-    merged_trend = pd.merge(vakts_ajalugu, haigus_ajalugu, on="Aasta")
-    fig3 = px.line(merged_trend, x="Aasta", y=["Vaktsineerimine", "Haigestumus"],
-                   markers=True, title="Vaktsineerimise ja haigestumise trend", labels={
-                       "value": "Väärtus", "variable": "Mõõdik"
-                   })
-    st.plotly_chart(fig3, use_container_width=True)
-else:
-    st.warning("❗ Trendide joonistamiseks puuduvad andmed.")
-
-# --- VÕRDLUSGRAAFIK: VAKTSINEERIMATA vs HAIGESTUNUD ---
-st.subheader("📊 Haigestunute arv vs vaktsineerimata osakaal")
-
-try:
-    vakts_row = vakts_df.query("Aasta == @valitud_aasta and Maakond == @valitud_maakond")
-    haigus_row = haigused_df.query("Aasta == @valitud_aasta and Maakond == @valitud_maakond")
-
-    if not vakts_row.empty and not haigus_row.empty:
-        vaktsineerimata = 100 - vakts_row[valitud_haigus].values[0]
-        haigestunud = haigus_row[valitud_haigus].values[0]
-
-        võrdlus_df = pd.DataFrame({
-            "Näitaja": ["Vaktsineerimata osakaal (%)", "Haigestunute arv"],
-            "Väärtus": [vaktsineerimata, haigestunud]
-        })
-
-        fig4 = px.bar(võrdlus_df, x="Näitaja", y="Väärtus", color="Näitaja",
-                      title="Haigestunute arv vs vaktsineerimata osakaal", text="Väärtus")
-        st.plotly_chart(fig4, use_container_width=True)
-    else:
-        st.warning("❗ Valitud piirkonna kohta puuduvad täielikud andmed.")
-
-except Exception as e:
-    st.error(f"❌ Viga võrdlusgraafiku loomisel: {e}")
+df_plot = pd.DataFrame(andmed)
+fig = px.bar(df_plot, x="Haigus", y="Väärtus", color="Tüüp", barmode="group",
+             title=f"{valitud_maakond} – Vaktsineerimine ja haigestumus ({valitud_aasta})")
+st.plotly_chart(fig, use_container_width=True, key="summary_bar")
