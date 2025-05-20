@@ -13,10 +13,10 @@ st.set_page_config(layout="wide")
 st.title("💉 Vaktsineerimine ja haigestumus maakonniti")
 
 # --- LAE ANDMED ---
-vakts_df = pd.read_excel("vaktsineerimine.xlsx")
-haigused_df = pd.read_excel("Haigused.xlsx")
-maakond_gdf = gpd.read_file("maakond.json")
-asustus_gdf = gpd.read_file("asustusyksus.json")
+vakts_df = pd.read_excel("andmestikud/vaktsineerimine.xlsx")
+haigused_df = pd.read_excel("andmestikud/Haigused.xlsx")
+maakond_gdf = gpd.read_file("andmestikud/maakond.json")
+asustus_gdf = gpd.read_file("andmestikud/asustusyksus.json")
 
 # --- PUHASTUS ---
 def puhasta(df):
